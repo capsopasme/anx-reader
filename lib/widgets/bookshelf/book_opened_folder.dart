@@ -123,7 +123,7 @@ class _BookOpenedFolderState extends ConsumerState<BookOpenedFolder> {
               ),
             ),
       content: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.7,
+        width: MediaQuery.sizeOf(context).width * 0.7,
         child: GridView.builder(
             shrinkWrap: true,
             gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(

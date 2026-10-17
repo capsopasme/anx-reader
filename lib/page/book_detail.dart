@@ -91,8 +91,8 @@ class _BookDetailState extends ConsumerState<BookDetail> {
         blendMode: BlendMode.dstATop,
         child: BookCover(
           book: _book,
-          height: MediaQuery.of(context).size.height * 0.8,
-          width: MediaQuery.of(context).size.width,
+          height: MediaQuery.sizeOf(context).height * 0.8,
+          width: MediaQuery.sizeOf(context).width,
         ),
       );
       return Transform.scale(
@@ -478,7 +478,7 @@ class _BookDetailState extends ConsumerState<BookDetail> {
 
       return SizedBox(
         height: 130,
-        width: MediaQuery.of(context).size.width,
+        width: MediaQuery.sizeOf(context).width,
         child: FilledContainer(
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -501,7 +501,7 @@ class _BookDetailState extends ConsumerState<BookDetail> {
 
     Widget buildTagEditor() {
       return FilledContainer(
-        width: MediaQuery.of(context).size.width,
+        width: MediaQuery.sizeOf(context).width,
         margin: const EdgeInsets.symmetric(vertical: 10),
         padding: const EdgeInsets.all(12),
         child: AsyncSkeletonWrapper(
@@ -760,7 +760,7 @@ class _BookDetailState extends ConsumerState<BookDetail> {
       return SingleChildScrollView(
         child: SizedBox(
             // height: 500,
-            width: MediaQuery.of(context).size.width,
+            width: MediaQuery.sizeOf(context).width,
             child: FilledContainer(
               padding: const EdgeInsets.all(12),
               child: Column(

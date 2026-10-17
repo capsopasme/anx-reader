@@ -107,7 +107,7 @@ Future<void> openAboutDialog() async {
         ),
         child: SingleChildScrollView(
           child: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.8,
+            width: MediaQuery.sizeOf(context).width * 0.8,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

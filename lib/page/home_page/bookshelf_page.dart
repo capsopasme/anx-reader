@@ -204,7 +204,7 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
 
         final liveSelected = {...selectedTags};
 
-        final boxMaxWidth = max(MediaQuery.of(context).size.width * 0.8, 500.0);
+        final boxMaxWidth = max(MediaQuery.sizeOf(context).width * 0.8, 500.0);
 
         await showMenu<int>(
           color: Colors.transparent,
@@ -579,8 +579,8 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
               showMenu(
                 context: context,
                 position: RelativeRect.fromLTRB(
-                  MediaQuery.of(context).size.width,
-                  MediaQuery.of(context).padding.top + kToolbarHeight,
+                  MediaQuery.sizeOf(context).width,
+                  MediaQuery.paddingOf(context).top + kToolbarHeight,
                   0.0,
                   0.0,
                 ),

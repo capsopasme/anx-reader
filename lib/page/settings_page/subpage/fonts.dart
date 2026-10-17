@@ -38,7 +38,7 @@ class FontsSettingPage extends ConsumerWidget {
                       CachedNetworkImage(
                         color: Theme.of(context).colorScheme.onSurface,
                         imageUrl: 'https://fonts.anxcye.com/${font.preview}',
-                        width: MediaQuery.of(context).size.width,
+                        width: MediaQuery.sizeOf(context).width,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => const Center(
                           child: CircularProgressIndicator(),

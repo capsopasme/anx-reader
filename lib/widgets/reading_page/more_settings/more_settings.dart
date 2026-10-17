@@ -50,8 +50,8 @@ void showMoreSettings(ReadingSettings settings) {
                 const Divider(height: 0),
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.5,
-                    maxWidth: MediaQuery.of(context).size.width * 0.8,
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.8,
                   ),
                   child: SingleChildScrollView(
                     child: ContentSizeTabBarView(

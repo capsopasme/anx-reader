@@ -190,7 +190,7 @@ class _BgimgSelectorState extends ConsumerState<BgimgSelector> {
                   right: 0,
                   top: 0,
                   bottom: 0,
-                  width: MediaQuery.of(context).size.width * 0.4,
+                  width: MediaQuery.sizeOf(context).width * 0.4,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
@@ -443,7 +443,7 @@ class _BgimgSelectorState extends ConsumerState<BgimgSelector> {
         children: [
           _buildBgimgFitSelector(context),
           SizedBox(
-            height: MediaQuery.of(context).size.height * 0.5,
+            height: MediaQuery.sizeOf(context).height * 0.5,
             child: ListView.builder(
               itemCount: bgimgList.length + 1,
               itemBuilder: (context, index) {

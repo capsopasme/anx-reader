@@ -569,7 +569,7 @@ class _AiProviderDetailPageState extends ConsumerState<AiProviderDetailPage> {
         ),
         constraints: BoxConstraints(
           minWidth: 220,
-          maxHeight: MediaQuery.of(context).size.height * 0.4,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.4,
         ),
         items: models
             .map(

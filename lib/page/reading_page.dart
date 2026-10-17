@@ -427,7 +427,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
   }
 
   double _aiChatMaxWidth(BuildContext context) {
-    final totalWidth = MediaQuery.of(context).size.width;
+    final totalWidth = MediaQuery.sizeOf(context).width;
     final maxByPercentage = totalWidth * 0.65;
     final maxByRemaining = totalWidth - 320;
     final maxWidth = math.min(maxByPercentage, maxByRemaining);
@@ -435,7 +435,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
   }
 
   double _aiChatMaxHeight(BuildContext context) {
-    final totalHeight = MediaQuery.of(context).size.height;
+    final totalHeight = MediaQuery.sizeOf(context).height;
     final maxByPercentage = totalHeight * 0.60;
     final maxByRemaining = totalHeight - 320;
     final maxHeight = math.min(maxByPercentage, maxByRemaining);
@@ -632,7 +632,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
 
     // Determine display mode
     final displayMode = Prefs().aiChatDisplayMode;
-    final screenWidth = MediaQuery.of(navigatorKey.currentContext!).size.width;
+    final screenWidth = MediaQuery.sizeOf(navigatorKey.currentContext!).width;
 
     bool shouldShowAsPopup = false;
 
@@ -652,26 +652,25 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     }
 
     if (shouldShowAsPopup) {
+      // Build the chat once. The sheet builder can be re-run by the route
+      // (e.g. on every frame of the keyboard animation); returning the same
+      // instance keeps the whole chat from rebuilding each time.
+      final chat = Padding(
+        padding: const EdgeInsets.only(top: 8.0),
+        child: AiChatStream(
+          key: aiChatKey,
+          initialMessage: content,
+          sendImmediate: sendImmediate,
+          quickPromptChips: quickPrompts,
+        ),
+      );
       showModalBottomSheet(
           context: navigatorKey.currentContext!,
           isScrollControlled: true,
           showDragHandle: false,
           clipBehavior: Clip.hardEdge,
           builder: (context) => PointerInterceptor(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.8,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: AiChatStream(
-                      key: aiChatKey,
-                      initialMessage: content,
-                      sendImmediate: sendImmediate,
-                      quickPromptChips: quickPrompts,
-                    ),
-                  ),
-                ),
+                child: _AiChatSheetFrame(child: chat),
               ));
     } else {
       setState(() {
@@ -713,7 +712,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
       onPressed: () async {
         // Determine if should show as split based on display mode
         final displayMode = Prefs().aiChatDisplayMode;
-        final screenWidth = MediaQuery.of(context).size.width;
+        final screenWidth = MediaQuery.sizeOf(context).width;
 
         bool shouldShowAsSplit = false;
         switch (displayMode) {
@@ -887,15 +886,15 @@ class ReadingPageState extends ConsumerState<ReadingPage>
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: SizedBox(
-            height: MediaQuery.of(context).size.height,
-            width: MediaQuery.of(context).size.width,
+            height: MediaQuery.sizeOf(context).height,
+            width: MediaQuery.sizeOf(context).width,
             child: Scaffold(
               key: _scaffoldKey,
               resizeToAvoidBottomInset: false,
               drawer: PointerInterceptor(
                 child: Drawer(
                   width: math.min(
-                    MediaQuery.of(context).size.width * 0.8,
+                    MediaQuery.sizeOf(context).width * 0.8,
                     420,
                   ),
                   child: SafeArea(
@@ -923,7 +922,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                             if (!Prefs().showMenuOnHover) return;
                             var y = detail.position.dy;
                             if (y < 30 ||
-                                y > MediaQuery.of(context).size.height - 30) {
+                                y > MediaQuery.sizeOf(context).height - 30) {
                               showOrHideAppBarAndBottomBar(true);
                             }
                           },
@@ -1062,6 +1061,24 @@ class ReadingPageState extends ConsumerState<ReadingPage>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Limits the AI chat sheet to 80% of the screen height. Uses
+/// [MediaQuery.sizeOf] so it does not rebuild while the keyboard animates.
+class _AiChatSheetFrame extends StatelessWidget {
+  const _AiChatSheetFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+      ),
+      child: child,
     );
   }
 }

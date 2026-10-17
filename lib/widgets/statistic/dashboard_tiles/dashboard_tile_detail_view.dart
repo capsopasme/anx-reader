@@ -110,10 +110,10 @@ class _DashboardTileDetailViewState
           duration:
               _isDragging ? Duration.zero : const Duration(milliseconds: 300),
           curve: Curves.elasticOut,
-          left: MediaQuery.of(context).size.width / 2 -
+          left: MediaQuery.sizeOf(context).width / 2 -
               widget.tile.flipSize(context).width / 2 +
               _dragOffset.dx,
-          top: MediaQuery.of(context).size.height / 2 -
+          top: MediaQuery.sizeOf(context).height / 2 -
               widget.tile.flipSize(context).height / 2 +
               _dragOffset.dy,
           child: GestureDetector(

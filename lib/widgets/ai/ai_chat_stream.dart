@@ -58,6 +58,20 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
   final ScrollController _scrollController = ScrollController();
   bool _isStreaming = false;
   late List<String> _suggestedPrompts;
+
+  /// Streaming chunks can arrive every few milliseconds. Rebuilding the chat
+  /// for each of them makes the UI janky, so updates are coalesced and pushed
+  /// to the list at most once per [_streamUiInterval].
+  static const Duration _streamUiInterval = Duration(milliseconds: 80);
+  Timer? _streamFlushTimer;
+
+  /// Whether the list keeps following the reply while it streams. Turned off
+  /// when the user scrolls up, back on when they return to the bottom.
+  bool _followStream = true;
+
+  /// Cached bubble widgets: returning the identical instance lets Flutter skip
+  /// rebuilding (and re-parsing the markdown of) messages that did not change.
+  final Map<int, _BubbleCacheEntry> _bubbleCache = {};
   late List<String> _starterPrompts;
   double _fontSize = 14.0;
 
@@ -114,6 +128,7 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
 
   @override
   void dispose() {
+    _streamFlushTimer?.cancel();
     inputController.dispose();
     _messageSubscription?.cancel();
     _messageController?.close();
@@ -168,6 +183,36 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
         );
       }
     });
+  }
+
+  /// Keeps the streaming reply in view without stacking long scroll
+  /// animations on every chunk.
+  void _followStreamToBottom() {
+    if (!_followStream) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_followStream || !_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      final target = position.maxScrollExtent;
+      if ((target - position.pixels).abs() < 1) return;
+      _scrollController.animateTo(
+        target,
+        duration: _streamUiInterval + const Duration(milliseconds: 20),
+        curve: Curves.linear,
+      );
+    });
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    if (notification is ScrollUpdateNotification &&
+        notification.dragDetails != null) {
+      // Only user drags change the follow mode.
+      _followStream = notification.metrics.extentAfter < 48;
+    } else if (notification is ScrollEndNotification &&
+        notification.metrics.extentAfter < 48) {
+      _followStream = true;
+    }
+    return false;
   }
 
   Widget _buildHistoryDrawer(BuildContext context) {
@@ -387,12 +432,36 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
       _isStreaming = true;
     });
 
+    _followStream = true;
+    _streamFlushTimer?.cancel();
+    _streamFlushTimer = null;
+    List<ChatMessage>? pending;
+    var lastFlush = DateTime.fromMillisecondsSinceEpoch(0);
+
+    void flush() {
+      _streamFlushTimer = null;
+      final event = pending;
+      pending = null;
+      if (event == null || controller.isClosed) return;
+      lastFlush = DateTime.now();
+      controller.add(event);
+      _followStreamToBottom();
+    }
+
     _messageSubscription = stream.listen(
       (event) {
-        controller.add(event);
-        _scrollToBottom();
+        pending = event;
+        if (_streamFlushTimer != null) return;
+        final elapsed = DateTime.now().difference(lastFlush);
+        if (elapsed >= _streamUiInterval) {
+          flush();
+        } else {
+          _streamFlushTimer = Timer(_streamUiInterval - elapsed, flush);
+        }
       },
       onError: (error, stack) {
+        _streamFlushTimer?.cancel();
+        flush();
         controller.addError(error, stack);
         if (!controller.isClosed) {
           controller.close();
@@ -404,6 +473,8 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
         }
       },
       onDone: () {
+        _streamFlushTimer?.cancel();
+        flush();
         if (!controller.isClosed) {
           controller.close();
         }
@@ -477,6 +548,8 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
   void _cancelStreaming() {
     if (!_isStreaming) return;
     cancelActiveAiRequest();
+    _streamFlushTimer?.cancel();
+    _streamFlushTimer = null;
     _messageSubscription?.cancel();
     _messageSubscription = null;
     _messageController?.close();
@@ -544,20 +617,6 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
         ),
       ],
     );
-  }
-
-  ChatMessage? _getLastAssistantMessage() {
-    final messages = ref.watch(aiChatProvider).asData?.value;
-    if (messages == null || messages.isEmpty) {
-      return null;
-    }
-
-    for (int i = messages.length - 1; i >= 0; i--) {
-      if (messages[i] is AIChatMessage) {
-        return messages[i];
-      }
-    }
-    return null;
   }
 
   @override
@@ -737,7 +796,7 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
           right: 16,
           bottom: 16,
           child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.3,
+            height: MediaQuery.sizeOf(context).height * 0.3,
             child: SingleChildScrollView(
               // scrollDirection: Axis.horizontal,
               child: Column(
@@ -859,7 +918,7 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
 
   Widget _buildDataSharingConsent(BuildContext context) {
     final theme = Theme.of(context);
-    final maxWidth = MediaQuery.of(context).size.width * 0.9;
+    final maxWidth = MediaQuery.sizeOf(context).width * 0.9;
     final constrainedWidth = maxWidth > 500 ? 500.0 : maxWidth;
 
     return Container(
@@ -912,15 +971,32 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
   }
 
   Widget _buildMessageList(List<ChatMessage> messages) {
-    return ListView.builder(
-      controller: _scrollController,
-      itemCount: messages.length,
-      itemBuilder: (context, index) {
-        final message = messages[index];
-        final isStreaming =
-            _messageStream != null && index == messages.length - 1;
-        return _buildMessageItem(message, index, isStreaming);
-      },
+    var lastAssistantIndex = -1;
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (messages[i] is AIChatMessage) {
+        lastAssistantIndex = i;
+        break;
+      }
+    }
+    _bubbleCache.removeWhere((index, _) => index >= messages.length);
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: _handleScrollNotification,
+      child: ListView.builder(
+        controller: _scrollController,
+        itemCount: messages.length,
+        itemBuilder: (context, index) {
+          final message = messages[index];
+          final isStreaming =
+              _messageStream != null && index == messages.length - 1;
+          return _buildMessageItem(
+            message,
+            index,
+            isStreaming,
+            index == lastAssistantIndex,
+          );
+        },
+      ),
     );
   }
 
@@ -928,12 +1004,106 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
     ChatMessage message,
     int index,
     bool isStreaming,
+    bool isLastAssistant,
   ) {
+    final cached = _bubbleCache[index];
+    if (cached != null &&
+        identical(cached.message, message) &&
+        cached.isStreaming == isStreaming &&
+        cached.isLastAssistant == isLastAssistant &&
+        cached.fontSize == _fontSize) {
+      return cached.widget;
+    }
+
+    final bubble = _ChatMessageBubble(
+      key: ValueKey<int>(index),
+      message: message,
+      isStreaming: isStreaming,
+      fontSize: _fontSize,
+      onRegenerate: isLastAssistant ? _regenerateLastMessage : null,
+      onCopy: _copyMessageContent,
+    );
+    _bubbleCache[index] = _BubbleCacheEntry(
+      message: message,
+      isStreaming: isStreaming,
+      isLastAssistant: isLastAssistant,
+      fontSize: _fontSize,
+      widget: bubble,
+    );
+    return bubble;
+  }
+
+  String _buildCopyableText(ParsedReasoning parsed, String fallback) {
+    final buffer = StringBuffer();
+    var hasWrittenSection = false;
+
+    void startSection() {
+      if (hasWrittenSection) {
+        buffer.writeln();
+      } else {
+        hasWrittenSection = true;
+      }
+    }
+
+    for (final entry in parsed.timeline) {
+      switch (entry.type) {
+        case ParsedReasoningEntryType.reply:
+          final text = entry.text?.trim();
+          if (text != null && text.isNotEmpty) {
+            startSection();
+            buffer.writeln(text);
+          }
+          break;
+        case ParsedReasoningEntryType.tool:
+          break;
+      }
+    }
+
+    final copyText = buffer.toString().trimRight();
+    if (copyText.isEmpty) {
+      return fallback;
+    }
+    return copyText;
+  }
+}
+
+class _BubbleCacheEntry {
+  const _BubbleCacheEntry({
+    required this.message,
+    required this.isStreaming,
+    required this.isLastAssistant,
+    required this.fontSize,
+    required this.widget,
+  });
+
+  final ChatMessage message;
+  final bool isStreaming;
+  final bool isLastAssistant;
+  final double fontSize;
+  final Widget widget;
+}
+
+class _ChatMessageBubble extends StatelessWidget {
+  const _ChatMessageBubble({
+    super.key,
+    required this.message,
+    required this.isStreaming,
+    required this.fontSize,
+    required this.onCopy,
+    this.onRegenerate,
+  });
+
+  final ChatMessage message;
+  final bool isStreaming;
+  final double fontSize;
+  final void Function(String content) onCopy;
+  final VoidCallback? onRegenerate;
+
+  @override
+  Widget build(BuildContext context) {
     final isUser = message is HumanChatMessage;
     final content = chatMessageDisplayContent(message);
-    final parsed = parseReasoningContent(content);
     final isLongMessage = content.length > 300;
-    final lastAssistantMessage = _getLastAssistantMessage();
 
     return Padding(
       padding: EdgeInsets.only(
@@ -966,18 +1136,21 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
                 children: [
                   isUser
                       ? _buildCollapsibleText(content, isLongMessage)
-                      : _buildAssistantTimeline(parsed, isStreaming),
+                      : _buildAssistantTimeline(
+                          context,
+                          parseReasoningContent(content),
+                        ),
                   if (!isUser)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        if (identical(message, lastAssistantMessage))
+                        if (onRegenerate != null)
                           TextButton(
-                            onPressed: _regenerateLastMessage,
+                            onPressed: onRegenerate,
                             child: Text(L10n.of(context).aiRegenerate),
                           ),
                         TextButton(
-                          onPressed: () => _copyMessageContent(content),
+                          onPressed: () => onCopy(content),
                           child: Text(L10n.of(context).commonCopy),
                         ),
                       ],
@@ -992,55 +1165,10 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
     );
   }
 
-  String _buildCopyableText(ParsedReasoning parsed, String fallback) {
-    final buffer = StringBuffer();
-    var hasWrittenSection = false;
-
-    void startSection() {
-      if (hasWrittenSection) {
-        buffer.writeln();
-      } else {
-        hasWrittenSection = true;
-      }
-    }
-
-    // void appendField(String label, String? value) {
-    //   final trimmed = value?.trim();
-    //   if (trimmed != null && trimmed.isNotEmpty) {
-    //     buffer.writeln('$label: $trimmed');
-    //   }
-    // }
-
-    for (final entry in parsed.timeline) {
-      switch (entry.type) {
-        case ParsedReasoningEntryType.reply:
-          final text = entry.text?.trim();
-          if (text != null && text.isNotEmpty) {
-            startSection();
-            buffer.writeln(text);
-          }
-          break;
-        case ParsedReasoningEntryType.tool:
-          // final step = entry.toolStep;
-          // if (step != null) {
-          //   startSection();
-          //   buffer.writeln('[${step.name} (${step.status})]');
-          //   appendField('Input', step.input);
-          //   appendField('Output', step.output);
-          //   appendField('Error', step.error);
-          // }
-          break;
-      }
-    }
-
-    final copyText = buffer.toString().trimRight();
-    if (copyText.isEmpty) {
-      return fallback;
-    }
-    return copyText;
-  }
-
-  Widget _buildAssistantTimeline(ParsedReasoning parsed, bool isStreaming) {
+  Widget _buildAssistantTimeline(
+    BuildContext context,
+    ParsedReasoning parsed,
+  ) {
     if (parsed.timeline.isEmpty) {
       return isStreaming
           ? Skeletonizer.zone(child: Bone.multiText())
@@ -1049,16 +1177,16 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
 
     final reasoningWidgets = _buildTimelineWidgets(
       parsed.reasoningTimeline,
-      fontSize: (_fontSize - 1).clamp(11.0, _fontSize).toDouble(),
+      fontSize: (fontSize - 1).clamp(11.0, fontSize).toDouble(),
     );
     final answerWidgets = _buildTimelineWidgets(
       parsed.answerTimeline,
-      fontSize: _fontSize,
+      fontSize: fontSize,
     );
     final widgets = <Widget>[];
 
     if (reasoningWidgets.isNotEmpty) {
-      widgets.add(_buildThinkingPanel(reasoningWidgets));
+      widgets.add(_buildThinkingPanel(context, reasoningWidgets));
     }
     if (answerWidgets.isNotEmpty) {
       if (widgets.isNotEmpty) {
@@ -1087,6 +1215,9 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
           if (entry.text != null && entry.text!.trim().isNotEmpty) {
             widgets.add(
               StyledMarkdown(
+                // Keyed by position so the markdown state (and its cached
+                // blocks) survives each streaming update.
+                key: ValueKey<String>('reply-${entry.section.name}-$i'),
                 data: entry.text!,
                 selectable: true,
                 fontSize: fontSize,
@@ -1108,7 +1239,7 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
     return widgets;
   }
 
-  Widget _buildThinkingPanel(List<Widget> children) {
+  Widget _buildThinkingPanel(BuildContext context, List<Widget> children) {
     final theme = Theme.of(context);
     final accentColor = theme.colorScheme.secondary.withValues(alpha: 0.82);
     final subtleColor = theme.colorScheme.secondary.withValues(alpha: 0.68);
@@ -1178,12 +1309,12 @@ class AiChatStreamState extends ConsumerState<AiChatStream> {
     if (!isLongMessage) {
       return SelectableText(
         text,
-        style: TextStyle(fontSize: _fontSize),
+        style: TextStyle(fontSize: fontSize),
         selectionControls: MaterialTextSelectionControls(),
       );
     }
 
-    return _CollapsibleText(text: text, fontSize: _fontSize);
+    return _CollapsibleText(text: text, fontSize: fontSize);
   }
 }
 

@@ -117,7 +117,7 @@ class _AddTileSheetContentState extends ConsumerState<AddTileSheetContent> {
 
     return FilledContainer(
       color: Theme.of(context).scaffoldBackgroundColor,
-      height: MediaQuery.of(context).size.height * 0.6,
+      height: MediaQuery.sizeOf(context).height * 0.6,
       child: Column(
         children: [
           Padding(

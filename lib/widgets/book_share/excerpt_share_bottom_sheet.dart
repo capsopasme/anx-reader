@@ -151,13 +151,13 @@ class _ExcerptShareBottomSheetState
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.sizeOf(context).height * 0.85,
       child: Column(
         children: [
           Expanded(
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height * 0.3,
+                minHeight: MediaQuery.sizeOf(context).height * 0.3,
               ),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16.0),
@@ -182,7 +182,7 @@ class _ExcerptShareBottomSheetState
           const SizedBox(height: 16),
           ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.4,
+              maxHeight: MediaQuery.sizeOf(context).height * 0.4,
             ),
             child: SingleChildScrollView(
               child: Padding(

@@ -66,8 +66,8 @@ class _LogPageState extends State<LogPage> {
     showMenu(
       context: context,
       position: RelativeRect.fromLTRB(
-        MediaQuery.of(context).size.width,
-        MediaQuery.of(context).padding.top + kToolbarHeight,
+        MediaQuery.sizeOf(context).width,
+        MediaQuery.paddingOf(context).top + kToolbarHeight,
         0.0,
         0.0,
       ),

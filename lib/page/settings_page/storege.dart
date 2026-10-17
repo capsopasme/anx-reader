@@ -373,9 +373,9 @@ class _StorageSettingsState extends ConsumerState<StorageSettings>
                       ],
                     ),
                     SizedBox(
-                      height: MediaQuery.of(context).size.height -
-                          MediaQuery.of(context).padding.top -
-                          MediaQuery.of(context).padding.bottom -
+                      height: MediaQuery.sizeOf(context).height -
+                          MediaQuery.paddingOf(context).top -
+                          MediaQuery.paddingOf(context).bottom -
                           kToolbarHeight -
                           140,
                       child: TabBarView(

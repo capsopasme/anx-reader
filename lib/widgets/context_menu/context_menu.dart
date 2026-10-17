@@ -370,7 +370,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
 
   void _updatePlacement() {
     final renderBox = _menuKey.currentContext?.findRenderObject() as RenderBox?;
-    final double currentBottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final double currentBottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final newConstraints = _buildConstraints(currentBottomInset);
 
     if (renderBox == null) {

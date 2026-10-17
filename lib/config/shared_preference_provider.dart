@@ -1245,7 +1245,7 @@ class Prefs extends ChangeNotifier {
           ReadingInfoEnum.none,
         ),
         verticalMargin: prefs.getDouble('pageHeaderMargin') ??
-            MediaQuery.of(navigatorKey.currentContext!).padding.bottom,
+            MediaQuery.paddingOf(navigatorKey.currentContext!).bottom,
         leftMargin: prefs.getDouble('pageHeaderLeftMargin') ?? 20,
         rightMargin: prefs.getDouble('pageHeaderRightMargin') ?? 20,
         fontSize: prefs.getDouble('pageHeaderFontSize') ?? 10,
@@ -1264,7 +1264,7 @@ class Prefs extends ChangeNotifier {
           ReadingInfoEnum.bookProgress,
         ),
         verticalMargin: prefs.getDouble('pageFooterMargin') ??
-            MediaQuery.of(navigatorKey.currentContext!).padding.bottom,
+            MediaQuery.paddingOf(navigatorKey.currentContext!).bottom,
         leftMargin: prefs.getDouble('pageFooterLeftMargin') ?? 20,
         rightMargin: prefs.getDouble('pageFooterRightMargin') ?? 20,
         fontSize: prefs.getDouble('pageFooterFontSize') ?? 10,

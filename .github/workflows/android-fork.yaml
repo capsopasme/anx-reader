@@ -1,0 +1,120 @@
+name: Android (fork build)
+
+# Builds a signed arm64 APK of this fork and uploads it as a workflow artifact
+# (download it from the run's page in the Actions tab).
+# Runs on pushes to develop and to perf/** or fix/** branches, or manually.
+# Needs the repository secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD,
+# KEY_PASSWORD and KEY_ALIAS.
+
+on:
+  push:
+    branches: [develop, 'perf/**', 'fix/**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-fork-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read versions
+        id: versions
+        shell: bash
+        run: |
+          echo "flutter=$(cat .github/flutter-version)" >> "$GITHUB_OUTPUT"
+          APP_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
+          echo "app=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Check signing secrets
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          missing=()
+          [ -z "$KEYSTORE_BASE64" ] && missing+=(KEYSTORE_BASE64)
+          [ -z "$KEYSTORE_PASSWORD" ] && missing+=(KEYSTORE_PASSWORD)
+          [ -z "$KEY_PASSWORD" ] && missing+=(KEY_PASSWORD)
+          [ -z "$KEY_ALIAS" ] && missing+=(KEY_ALIAS)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing repository secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ steps.versions.outputs.flutter }}
+          cache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Get dependencies and generate code
+        run: |
+          flutter --version
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze changed areas
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/widgets/ai lib/widgets/markdown lib/page/reading_page.dart
+
+      - name: Setup Android signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/keystore.jks
+          {
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "storeFile=keystore.jks"
+          } > android/key.properties
+
+      - name: Build APK (arm64)
+        run: |
+          flutter build apk --release --split-per-abi --target-platform android-arm64
+
+      - name: Rename APK
+        id: apk
+        shell: bash
+        run: |
+          cd build/app/outputs/flutter-apk
+          NAME="Anx-Reader-${{ steps.versions.outputs.app }}-fork.${{ github.run_number }}-arm64-v8a.apk"
+          mv app-arm64-v8a-release.apk "$NAME"
+          echo "path=build/app/outputs/flutter-apk/$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error

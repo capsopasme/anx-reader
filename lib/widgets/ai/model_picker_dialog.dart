@@ -154,7 +154,7 @@ class _ModelPickerDialogState extends State<_ModelPickerDialog> {
               ),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.35,
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.35,
                 ),
                 child: ListView.builder(
                   shrinkWrap: true,
