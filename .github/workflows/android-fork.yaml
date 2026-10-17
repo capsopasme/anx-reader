@@ -42,13 +42,13 @@ jobs:
       - name: Check signing secrets
         shell: bash
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || secrets.KEYSTORE || secrets.SIGNING_KEY || secrets.KEYSTORE_FILE || secrets.KEY_STORE_BASE64 || secrets.ANDROID_KEYSTORE_BASE64 || secrets.RELEASE_KEYSTORE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           missing=()
-          [ -z "$KEYSTORE_BASE64" ] && missing+=(KEYSTORE_BASE64)
+          [ -z "$KEYSTORE_BASE64" ] && missing+=("KEYSTORE_BASE64 (base64 of the .jks file)")
           [ -z "$KEYSTORE_PASSWORD" ] && missing+=(KEYSTORE_PASSWORD)
           [ -z "$KEY_PASSWORD" ] && missing+=(KEY_PASSWORD)
           [ -z "$KEY_ALIAS" ] && missing+=(KEY_ALIAS)
@@ -86,7 +86,7 @@ jobs:
       - name: Setup Android signing
         shell: bash
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || secrets.KEYSTORE || secrets.SIGNING_KEY || secrets.KEYSTORE_FILE || secrets.KEY_STORE_BASE64 || secrets.ANDROID_KEYSTORE_BASE64 || secrets.RELEASE_KEYSTORE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
